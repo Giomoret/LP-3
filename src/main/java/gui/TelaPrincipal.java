@@ -2,11 +2,23 @@ package gui;
 
 import javax.swing.*;
 import java.awt.*;
+import com.formdev.flatlaf.FlatDarkLaf;
+import java.awt.Image;
+import java.net.URL;
+import javax.swing.ImageIcon;
 
 public class TelaPrincipal extends JFrame {
 
     public TelaPrincipal() {
         setTitle("Sistema - Mães Que Oram");
+        try {
+            URL resource = TelaPrincipal.class.getResource("/Church_white.png");
+            Image icon = new ImageIcon(resource).getImage();
+            setIconImage(icon);
+        } catch (Exception e) {
+            System.out.println("Erro ao carregar o ícone: " + e.getMessage());
+        }
+
         setSize(450, 450);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -46,6 +58,13 @@ public class TelaPrincipal extends JFrame {
     }
 
     public static void main(String[] args) {
+
+        try {
+            FlatDarkLaf.setup();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         SwingUtilities.invokeLater(() -> new TelaPrincipal().setVisible(true));
     }
 }
