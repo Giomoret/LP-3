@@ -75,7 +75,7 @@ public class TelaListaEncontros extends JFrame {
             for (Servico s : e.getServicos()) {
                 infoServicos.append(s.getTipo())
                         .append(" - ")
-                        .append(s.getMae() != null ? s.getMae() : "SEM RESPONSÁVEL")
+                        .append(s.getNomeMae() != null ? s.getNomeMae() : "SEM RESPONSÁVEL")
                         .append("\n");
             }
 

@@ -105,23 +105,36 @@ public class EncontroDAO {
     public List<Servico> buscarServicosPorData(String data) {
         List<Servico> servicos = new ArrayList<>();
 
+        // CORREÇÃO SQL:
+        // 1. Usa s.nome_servico (em vez de s.tipo).
+        // 2. Faz JOIN com a tabela 'mae' (m) para buscar o nome da mãe.
+        // 3. Usa s.id_encontro (em vez de s.encontro_id).
         String sql = """
-            SELECT s.tipo, s.mae
+            SELECT s.nome_servico, m.nome AS nome_mae
             FROM servico s
-            INNER JOIN encontro e ON s.encontro_id = e.id_encontro
+            INNER JOIN encontro e ON s.id_encontro = e.id_encontro
+            LEFT JOIN mae m ON s.id_mae = m.id_mae
             WHERE e.data_encontro = ?
         """;
 
         try (Connection conn = ConnectionFactory.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
+            // Converte a String de data para o tipo DATE do SQL se necessário,
+            // ou deixa como string se o banco aceitar (MySQL aceita DATE como string 'yyyy-MM-dd')
             stmt.setString(1, data);
             ResultSet rs = stmt.executeQuery();
 
             while (rs.next()) {
                 Servico s = new Servico();
-                s.setTipo(rs.getString("tipo"));
-                s.setMae(rs.getString("mae"));
+                // CORREÇÃO JAVA: Usa setTipo (que mapeia para nome_servico)
+                s.setTipo(rs.getString("nome_servico"));
+
+                // CORREÇÃO JAVA: Usa setNomeMae, lendo do alias 'nome_mae' do JOIN
+                s.setNomeMae(rs.getString("nome_mae"));
+
+                // Nota: Este método não carrega idMae nem descricao, se necessário no relatório, adicione-os na query SQL acima.
+
                 servicos.add(s);
             }
 

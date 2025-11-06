@@ -17,6 +17,9 @@ public class TelaRelatorio extends JFrame {
         setSize(350, 150);
         setLayout(new GridLayout(2, 2));
 
+        // CORREÇÃO: Adicionando esta linha para centralizar a janela na tela
+        this.setLocationRelativeTo(null);
+
         add(new JLabel("Data do Encontro (yyyy-MM-dd):"));
         add(txtData);
 
@@ -48,12 +51,16 @@ public class TelaRelatorio extends JFrame {
             fw.write("Serviços:\n\n");
 
             for (Servico s : servicos) {
-                fw.write(s.getTipo() + ": " + s.getMae());
+                String nomeMae = s.getNomeMae();
+                String responsavel = (nomeMae == null || nomeMae.isEmpty()) ? "" : nomeMae;
+
+                StringBuilder linha = new StringBuilder();
+                linha.append(s.getTipo()).append(": ").append(responsavel);
 
                 if (s.getDescricao() != null && !s.getDescricao().isBlank())
-                    fw.write("  ->  " + s.getDescricao());
+                    linha.append("  ->  ").append(s.getDescricao());
 
-                fw.write("\n");
+                fw.write(linha.toString() + "\n");
             }
 
             fw.close();

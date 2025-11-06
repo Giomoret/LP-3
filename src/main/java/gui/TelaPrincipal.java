@@ -2,7 +2,12 @@ package gui;
 
 import javax.swing.*;
 import java.awt.*;
+
+import com.formdev.flatlaf.FlatDarculaLaf;
 import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.themes.FlatMacLightLaf;
+
 import java.awt.Image;
 import java.net.URL;
 import javax.swing.ImageIcon;
@@ -60,7 +65,7 @@ public class TelaPrincipal extends JFrame {
     public static void main(String[] args) {
 
         try {
-            FlatDarkLaf.setup();
+            FlatDarculaLaf.setup();
         } catch (Exception e) {
             e.printStackTrace();
         }

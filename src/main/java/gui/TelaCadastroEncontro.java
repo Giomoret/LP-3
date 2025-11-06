@@ -19,7 +19,9 @@ public class TelaCadastroEncontro extends JFrame {
     private JTable tabelaServicos;
     private JComboBox<Mae> comboMae;
     private JTextField txtDataEncontro;
-    private List<Servico> servicosDoEncontro = new ArrayList<>();
+
+    // A lista servicosDoEncontro será preenchida APENAS na hora de salvar,
+    // garantindo que todos os 12 serviços sejam considerados.
 
     private MaeDAO maeDAO = new MaeDAO();
     private EncontroDAO encontroDAO = new EncontroDAO();
@@ -32,7 +34,10 @@ public class TelaCadastroEncontro extends JFrame {
 
         JPanel painel = new JPanel(new BorderLayout());
         painel.add(criarFormulario(), BorderLayout.NORTH);
+
+        // Coluna extra oculta para armazenar o ID da Mãe
         painel.add(criarTabelaServicos(), BorderLayout.CENTER);
+
         painel.add(criarBotoes(), BorderLayout.SOUTH);
 
         add(painel);
@@ -57,10 +62,24 @@ public class TelaCadastroEncontro extends JFrame {
     }
 
     private JScrollPane criarTabelaServicos() {
-        tabelaServicos = new JTable(new DefaultTableModel(
+        DefaultTableModel model = new DefaultTableModel(
                 new Object[][]{},
-                new String[]{"Serviço", "Mãe Responsável"}
-        ));
+                // ADICIONADO: Coluna ID da Mãe (oculta, para o DAO)
+                new String[]{"Serviço", "Mãe Responsável", "ID Mãe"}
+        ) {
+            // Torna a coluna 2 (ID Mãe) não editável e garante que o resto funcione
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        tabelaServicos = new JTable(model);
+
+        // Esconde a coluna do ID da Mãe, pois ela é apenas para o DAO
+        tabelaServicos.getColumnModel().getColumn(2).setMinWidth(0);
+        tabelaServicos.getColumnModel().getColumn(2).setMaxWidth(0);
+        tabelaServicos.getColumnModel().getColumn(2).setWidth(0);
+
         return new JScrollPane(tabelaServicos);
     }
 
@@ -74,12 +93,14 @@ public class TelaCadastroEncontro extends JFrame {
 
         DefaultTableModel model = (DefaultTableModel) tabelaServicos.getModel();
         for (String servico : servicosFixos) {
-            model.addRow(new Object[]{servico, ""});
+            // Adicionado 0 para o ID da Mãe (coluna 2), indicando NULO no BD
+            model.addRow(new Object[]{servico, "", 0});
         }
     }
 
     private void carregarMaes() {
         comboMae.removeAllItems();
+        // A MaeDAO.listar() deve garantir que o objeto Mae tem o ID da Mae
         for (Mae m : maeDAO.listar()) {
             comboMae.addItem(m);
         }
@@ -113,24 +134,41 @@ public class TelaCadastroEncontro extends JFrame {
             return;
         }
 
+        // 1. Define o nome visível (coluna 1)
         tabelaServicos.setValueAt(maeSelecionada.getNome(), linha, 1);
 
-        Servico servico = new Servico();
-        servico.setTipo((String) tabelaServicos.getValueAt(linha, 0));
-        servico.setMae(maeSelecionada.getNome()); // ✅ agora passa apenas o nome (String)
-
-        servicosDoEncontro.add(servico);
+        // 2. Define o ID da Mãe (coluna 2, oculta) para ser lido no momento de salvar
+        // É essencial que o objeto Mae retorne o ID correto (assumindo que Mae tem getIdMae())
+        tabelaServicos.setValueAt(maeSelecionada.getIdMae(), linha, 2);
     }
 
     private void salvarEncontro(ActionEvent e) {
+        // CORREÇÃO ESSENCIAL: Recria a lista de serviços a partir da tabela
+        List<Servico> servicosParaSalvar = new ArrayList<>();
+        DefaultTableModel model = (DefaultTableModel) tabelaServicos.getModel();
+
         try {
             LocalDate data = LocalDate.parse(txtDataEncontro.getText());
 
+            for (int i = 0; i < model.getRowCount(); i++) {
+                String tipoServico = (String) model.getValueAt(i, 0);
+                int idMae = (Integer) model.getValueAt(i, 2); // Pega o ID da Mãe da coluna oculta
+
+                Servico s = new Servico();
+                s.setTipo(tipoServico);
+                s.setIdMae(idMae); // O DAO usará este ID para salvar
+                // s.setDescricao (se houvesse um campo para isso, você leria aqui)
+
+                servicosParaSalvar.add(s);
+            }
+
             Encontro encontro = new Encontro();
             encontro.setDataEncontro(data);
-            encontro.setServicos(servicosDoEncontro);
 
-            encontroDAO.inserir(encontro); // ✅ Envia os serviços para o DAO corretamente
+            // ATRIBUI A LISTA COMPLETA
+            encontro.setServicos(servicosParaSalvar);
+
+            encontroDAO.inserir(encontro);
 
             JOptionPane.showMessageDialog(this, "✅ Encontro salvo com sucesso!");
             dispose();
