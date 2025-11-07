@@ -8,7 +8,8 @@ import factory.ConnectionFactory;
 
 public class MaeDAO {
 
-    public void inserir(Mae mae) {
+    // ================== INSERIR MÃE (CORRIGIDO: LANÇA EXCEÇÃO) ==================
+    public void inserir(Mae mae) throws SQLException {
         String sql = "INSERT INTO mae (nome, telefone, endereco, data_aniversario) VALUES (?, ?, ?, ?)";
 
         try (Connection conn = ConnectionFactory.getConnection();
@@ -26,11 +27,11 @@ public class MaeDAO {
 
             stmt.executeUpdate();
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } // <-- catch removido
     }
-    public void atualizar(Mae mae) {
+
+    // ================== ATUALIZAR MÃE (CORRIGIDO: LANÇA EXCEÇÃO) ==================
+    public void atualizar(Mae mae) throws SQLException {
         String sql = "UPDATE mae SET nome = ?, telefone = ?, endereco = ?, data_aniversario = ? WHERE id_mae = ?";
 
         try (Connection conn = ConnectionFactory.getConnection();
@@ -49,12 +50,11 @@ public class MaeDAO {
             stmt.setInt(5, mae.getIdMae());
             stmt.executeUpdate();
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } // <-- catch removido
     }
 
-    public void excluir(int idMae) {
+    // ================== EXCLUIR MÃE (CORRIGIDO: LANÇA EXCEÇÃO) ==================
+    public void excluir(int idMae) throws SQLException {
         String sql = "DELETE FROM mae WHERE id_mae = ?";
 
         try (Connection conn = ConnectionFactory.getConnection();
@@ -63,14 +63,13 @@ public class MaeDAO {
             stmt.setInt(1, idMae);
             stmt.executeUpdate();
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } // <-- catch removido
     }
 
-    public List<Mae> listar() {
+    // ================== LISTAR TODAS AS MÃES (CORRIGIDO: LANÇA EXCEÇÃO) ==================
+    public List<Mae> listar() throws SQLException {
         List<Mae> maes = new ArrayList<>();
-        String sql = "SELECT * FROM mae";
+        String sql = "SELECT * FROM mae ORDER BY nome";
 
         try (Connection conn = ConnectionFactory.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
@@ -91,14 +90,13 @@ public class MaeDAO {
                 maes.add(mae);
             }
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } // <-- catch removido
 
         return maes;
     }
 
-    public List<Mae> listarAniversariantesDoMes() {
+    // ================== LISTAR ANIVERSARIANTES DO MÊS (CORRIGIDO: LANÇA EXCEÇÃO) ==================
+    public List<Mae> listarAniversariantesDoMes() throws SQLException {
         List<Mae> lista = new ArrayList<>();
         String sql = "SELECT * FROM aniversariantes_mes";
 
@@ -121,15 +119,15 @@ public class MaeDAO {
                 lista.add(mae);
             }
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } // <-- catch removido
 
         return lista;
     }
 
-    public Mae buscarPorNome(String nome) {
+    // ================== BUSCAR POR NOME (CORRIGIDO: LANÇA EXCEÇÃO) ==================
+    public Mae buscarPorNome(String nome) throws SQLException {
         String sql = "SELECT * FROM mae WHERE nome = ? LIMIT 1";
+        Mae mae = null; // Inicializa a variável fora do try
 
         try (Connection conn = ConnectionFactory.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -138,16 +136,15 @@ public class MaeDAO {
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {
-                Mae mae = new Mae();
+                mae = new Mae();
                 mae.setIdMae(rs.getInt("id_mae"));
                 mae.setNome(rs.getString("nome"));
-                return mae;
+
+                // Preenche os outros campos se necessário, ou use apenas id e nome
             }
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } // <-- catch removido
 
-        return null;
+        return mae;
     }
 }

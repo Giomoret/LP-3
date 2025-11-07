@@ -6,8 +6,12 @@ import modelo.Servico;
 import javax.swing.*;
 import java.awt.*;
 import java.io.FileWriter;
+import java.io.IOException; // NECESSÁRIO para FileWriter
 import java.net.URL;
 import java.util.List;
+import java.sql.SQLException; // NECESSÁRIO para o DAO
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 
 public class TelaRelatorio extends JFrame {
 
@@ -25,7 +29,6 @@ public class TelaRelatorio extends JFrame {
         setSize(350, 150);
         setLayout(new GridLayout(2, 2));
 
-        // CORREÇÃO: Adicionando esta linha para centralizar a janela na tela
         this.setLocationRelativeTo(null);
 
         add(new JLabel("Data do Encontro (yyyy-MM-dd):"));
@@ -41,44 +44,61 @@ public class TelaRelatorio extends JFrame {
     }
 
     private void gerarRelatorio() {
-        String dataDigitada = txtData.getText();
+        String dataDigitadaStr = txtData.getText();
+        LocalDate dataFormatada;
+        List<Servico> servicos;
 
-        EncontroDAO dao = new EncontroDAO();
-        List<Servico> servicos = dao.buscarServicosPorData(dataDigitada);
-
-        if (servicos.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Nenhum encontro encontrado nessa data.");
-            return;
-        }
-
+        // O bloco try-catch principal engloba TODA a lógica que pode lançar exceções.
         try {
-            FileWriter fw = new FileWriter("Relatorio_" + dataDigitada + ".txt");
+            // 1. TRATAMENTO DA DATA (DateTimeParseException)
+            dataFormatada = LocalDate.parse(dataDigitadaStr);
 
-            fw.write("Data do Encontro: " + dataDigitada + "\n\n");
-            fw.write("Serviços:\n\n");
+            EncontroDAO dao = new EncontroDAO();
 
-            for (Servico s : servicos) {
-                String nomeMae = s.getNomeMae();
-                String responsavel = (nomeMae == null || nomeMae.isEmpty()) ? "" : nomeMae;
+            // 2. ACESSO AO BANCO DE DADOS (SQLException) - LINHA 62 (aproximadamente)
+            servicos = dao.buscarServicosPorData(dataFormatada);
 
-                StringBuilder linha = new StringBuilder();
-                linha.append(s.getTipo()).append(": ").append(responsavel);
-
-                if (s.getDescricao() != null && !s.getDescricao().isBlank())
-                    linha.append("  ->  ").append(s.getDescricao());
-
-                fw.write(linha.toString() + "\n");
+            if (servicos.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "Nenhum encontro encontrado nessa data.");
+                return;
             }
 
-            fw.close();
+            // 3. OPERAÇÃO DE ARQUIVO (FileWriter / IOException)
+            try (FileWriter fw = new FileWriter("Relatorio_" + dataDigitadaStr + ".txt")) {
 
-            JOptionPane.showMessageDialog(this,
-                    "Relatório gerado com sucesso!\nArquivo: Relatorio_" + dataDigitada + ".txt");
+                fw.write("Data do Encontro: " + dataDigitadaStr + "\n\n");
+                fw.write("Serviços:\n\n");
 
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this,
-                    "Erro ao gerar relatório: " + e.getMessage());
+                for (Servico s : servicos) {
+                    String nomeMae = s.getNomeMae();
+                    String responsavelStr = (nomeMae == null || nomeMae.isEmpty()) ? "SEM RESPONSÁVEL" : nomeMae;
+
+                    StringBuilder linha = new StringBuilder();
+                    linha.append(s.getTipo()).append(": ").append(responsavelStr);
+
+                    if (s.getDescricao() != null && !s.getDescricao().isBlank())
+                        linha.append("  ->  ").append(s.getDescricao());
+
+                    fw.write(linha.toString() + "\n");
+                }
+
+                JOptionPane.showMessageDialog(this,
+                        "Relatório gerado com sucesso!\nArquivo: Relatorio_" + dataDigitadaStr + ".txt");
+
+            } catch (IOException ioe) {
+                // Captura especificamente erros de arquivo/escrita
+                JOptionPane.showMessageDialog(this, "Erro de Arquivo ao gerar relatório: " + ioe.getMessage(), "Erro de IO", JOptionPane.ERROR_MESSAGE);
+            }
+
+        } catch (DateTimeParseException dtpe) {
+            // Captura erro de formato de data
+            JOptionPane.showMessageDialog(this, "Erro: Verifique o formato da data. Use YYYY-MM-DD.", "Erro de Formato", JOptionPane.ERROR_MESSAGE);
+        } catch (SQLException sqle) {
+            // Captura erro do DAO (buscarServicosPorData)
+            JOptionPane.showMessageDialog(this, "Erro de Banco de Dados: Falha ao buscar serviços.", "Erro SQL", JOptionPane.ERROR_MESSAGE);
+            sqle.printStackTrace();
         }
+        // Não precisamos de um catch geral (Exception e) se cobrimos os principais
     }
 }

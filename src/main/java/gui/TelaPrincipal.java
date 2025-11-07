@@ -4,9 +4,10 @@ import javax.swing.*;
 import java.awt.*;
 
 import com.formdev.flatlaf.FlatDarculaLaf;
-import com.formdev.flatlaf.FlatDarkLaf;
-import com.formdev.flatlaf.FlatLightLaf;
-import com.formdev.flatlaf.themes.FlatMacLightLaf;
+// Importações de LAF omitidas para brevidade, mas você as mantém
+// import com.formdev.flatlaf.FlatDarkLaf;
+// import com.formdev.flatlaf.FlatLightLaf;
+// import com.formdev.flatlaf.themes.FlatMacLightLaf;
 
 import java.awt.Image;
 import java.net.URL;
@@ -35,29 +36,37 @@ public class TelaPrincipal extends JFrame {
         add(titulo, BorderLayout.NORTH);
 
         JPanel painel = new JPanel();
-        painel.setLayout(new GridLayout(5, 1, 10, 10));  // Aumentei para 5 linhas
+        painel.setLayout(new GridLayout(5, 1, 10, 10));
         painel.setBorder(BorderFactory.createEmptyBorder(20, 50, 50, 50));
 
         JButton btnMae = new JButton("Cadastro de Mães");
         JButton btnEncontro = new JButton("Cadastro de Encontros");
         JButton btnLista = new JButton("Lista de Encontros");
         JButton btnAniversario = new JButton("Aniversariantes do Mês");
-        JButton btnRelatorio = new JButton("Gerar Relatório");   // ✅ NOVO BOTÃO
+        JButton btnRelatorio = new JButton("Gerar Relatório");
 
-        // Ações dos botões
-        btnMae.addActionListener(e -> new TelaCadastroMae().setVisible(true));
-        btnEncontro.addActionListener(e -> new TelaCadastroEncontro().setVisible(true));
+        // --- Ações dos botões (CORREÇÃO DE ARGUMENTOS) ---
+
+        // CORREÇÃO LINHA 51: Passando 'this' e 'null' (2 argumentos esperados)
+        btnMae.addActionListener(e -> new TelaCadastroMae(this, null).setVisible(true));
+
+        // CORREÇÃO LINHA 54: Já estava correta
+        btnEncontro.addActionListener(e -> new TelaCadastroEncontro(this, null).setVisible(true));
+
         btnLista.addActionListener(e -> new TelaListaEncontros().setVisible(true));
+
         btnAniversario.addActionListener(e -> new TelaAniversariantes().setVisible(true));
 
-        // ✅ CHAMA A TELA DO RELATÓRIO
+        // CHAMA A TELA DO RELATÓRIO
         btnRelatorio.addActionListener(e -> new TelaRelatorio().setVisible(true));
+
+        // --- Adicionando ao Painel ---
 
         painel.add(btnMae);
         painel.add(btnEncontro);
         painel.add(btnLista);
         painel.add(btnAniversario);
-        painel.add(btnRelatorio);  // ✅ adicionando no painel
+        painel.add(btnRelatorio);
 
         add(painel, BorderLayout.CENTER);
     }

@@ -1,188 +1,268 @@
 package gui;
 
 import dao.EncontroDAO;
-import dao.MaeDAO;
 import modelo.Encontro;
 import modelo.Mae;
 import modelo.Servico;
+import dao.MaeDAO;
+import dao.ServicoDAO;
 
 import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.table.AbstractTableModel;
+import javax.swing.DefaultCellEditor;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.net.URL;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Vector;
+import java.util.stream.Collectors;
+import java.sql.SQLException; // Importação necessária
+import java.util.ArrayList; // Necessário para inicializar List<Mae>
 
-public class TelaCadastroEncontro extends JFrame {
+public class TelaCadastroEncontro extends JDialog {
 
-    private JTable tabelaServicos;
-    private JComboBox<Mae> comboMae;
-    private JTextField txtDataEncontro;
+    private TelaListaEncontros owner;
+    private Encontro encontroEmEdicao;
 
-    // A lista servicosDoEncontro será preenchida APENAS na hora de salvar,
-    // garantindo que todos os 12 serviços sejam considerados.
-
-    private MaeDAO maeDAO = new MaeDAO();
     private EncontroDAO encontroDAO = new EncontroDAO();
+    private MaeDAO maeDAO = new MaeDAO();
+    private ServicoDAO servicoDAO = new ServicoDAO();
 
-    public TelaCadastroEncontro() {
-        setTitle("Cadastro de Encontro");
-        try {
-            URL resource = TelaPrincipal.class.getResource("/Church_white.png");
-            Image icon = new ImageIcon(resource).getImage();
-            setIconImage(icon);
-        } catch (Exception e) {
-            System.out.println("Erro ao carregar o ícone: " + e.getMessage());
-        }
-        setSize(700, 500);
-        setLocationRelativeTo(null);
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+    // Componentes de Interface
+    private JTextField txtData;
+    private JButton btnSalvar;
+    private JTable tabelaServicos;
+    private ServicoTableModel servicoTableModel;
 
-        JPanel painel = new JPanel(new BorderLayout());
-        painel.add(criarFormulario(), BorderLayout.NORTH);
+    // Dados de suporte
+    private List<Mae> maesCadastradas; // Variável que causa o erro
 
-        // Coluna extra oculta para armazenar o ID da Mãe
-        painel.add(criarTabelaServicos(), BorderLayout.CENTER);
-
-        painel.add(criarBotoes(), BorderLayout.SOUTH);
-
-        add(painel);
-
-        carregarServicosFixos();
-        carregarMaes();
+    // Construtores... (inalterados)
+    public TelaCadastroEncontro(JFrame owner, Encontro encontro) {
+        super(owner, "Novo Encontro", true);
+        this.owner = null;
+        this.encontroEmEdicao = encontro;
+        inicializar(owner);
     }
 
-    private JPanel criarFormulario() {
-        JPanel form = new JPanel(new GridLayout(1, 4, 10, 10));
-        form.setBorder(BorderFactory.createTitledBorder("Informações"));
+    public TelaCadastroEncontro(TelaListaEncontros owner, Encontro encontro) {
+        super(owner, "Editar Encontro", true);
+        this.owner = owner;
+        this.encontroEmEdicao = encontro;
+        inicializar(owner);
 
-        txtDataEncontro = new JTextField();
-        comboMae = new JComboBox<>();
-
-        form.add(new JLabel("Data do Encontro (YYYY-MM-DD):"));
-        form.add(txtDataEncontro);
-        form.add(new JLabel("Responsável pelo Serviço:"));
-        form.add(comboMae);
-
-        return form;
-    }
-
-    private JScrollPane criarTabelaServicos() {
-        DefaultTableModel model = new DefaultTableModel(
-                new Object[][]{},
-                // ADICIONADO: Coluna ID da Mãe (oculta, para o DAO)
-                new String[]{"Serviço", "Mãe Responsável", "ID Mãe"}
-        ) {
-            // Torna a coluna 2 (ID Mãe) não editável e garante que o resto funcione
+        addWindowListener(new WindowAdapter() {
             @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
+            public void windowClosed(WindowEvent e) {
+                if (owner != null) {
+                    owner.carregarEncontros();
+                }
             }
-        };
-        tabelaServicos = new JTable(model);
+        });
+    }
 
-        // Esconde a coluna do ID da Mãe, pois ela é apenas para o DAO
-        tabelaServicos.getColumnModel().getColumn(2).setMinWidth(0);
-        tabelaServicos.getColumnModel().getColumn(2).setMaxWidth(0);
-        tabelaServicos.getColumnModel().getColumn(2).setWidth(0);
+    // Método centralizado de inicialização (COM TRATAMENTO DE ERRO)
+    private void inicializar(Frame owner) {
+        // --- CORREÇÃO DO ERRO DE LINHA 70 (e 198): TRATAMENTO DE SQL EXCEPTION NO CARREGAMENTO INICIAL ---
+        try {
+            this.maesCadastradas = maeDAO.listar(); // Este método Lança SQLException
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(owner,
+                    "Erro ao carregar lista de Mães. A tabela não será funcional: " + e.getMessage(),
+                    "Erro de Inicialização do Banco", JOptionPane.ERROR_MESSAGE);
+            this.maesCadastradas = new ArrayList<>(); // Inicializa com lista vazia para evitar NullPointerException
+        }
+        // ------------------------------------------------------------------------------------------------------
+
+        setSize(550, 450);
+
+        setLocationRelativeTo(owner);
+        setLayout(new BorderLayout());
+        setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+        JPanel painelSuperior = criarPainelSuperior();
+        // A chamada criarPainelTabela chama ServicoTableModel, que tem seu próprio try/catch
+        JScrollPane painelTabela = criarPainelTabela();
+
+        add(painelSuperior, BorderLayout.NORTH);
+        add(painelTabela, BorderLayout.CENTER);
+        add(criarBotaoSalvar(), BorderLayout.SOUTH);
+
+        carregarDadosIniciais();
+
+        if (this.encontroEmEdicao == null) {
+            setTitle("Novo Encontro");
+        } else {
+            setTitle("Editar Encontro");
+        }
+    }
+
+    private JPanel criarPainelSuperior() {
+        JPanel painel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        txtData = new JTextField(10);
+
+        painel.add(new JLabel("Data do Encontro (YYYY-MM-DD):"));
+        painel.add(txtData);
+        return painel;
+    }
+
+    private JScrollPane criarPainelTabela() {
+        // O construtor do ServicoTableModel (que chama servicoDAO.listar) está dentro de um try-catch interno
+        servicoTableModel = new ServicoTableModel(encontroEmEdicao, servicoDAO, maesCadastradas);
+        tabelaServicos = new JTable(servicoTableModel);
+
+        // --- CONFIGURAÇÃO DO EDITOR DE COMBOBOX (MAE) ---
+        Vector<Mae> itensMae = new Vector<>();
+        Mae placeholder = new Mae();
+        placeholder.setNome("--- Sem Responsável ---");
+        itensMae.add(placeholder);
+        itensMae.addAll(maesCadastradas);
+
+        JComboBox<Mae> cmbMaes = new JComboBox<>(itensMae);
+        tabelaServicos.getColumnModel().getColumn(1).setCellEditor(new DefaultCellEditor(cmbMaes));
+
+        // --- DEFINIÇÃO DA LARGURA DAS COLUNAS ---
+        tabelaServicos.getColumnModel().getColumn(0).setPreferredWidth(200);
+        tabelaServicos.getColumnModel().getColumn(1).setPreferredWidth(200);
 
         return new JScrollPane(tabelaServicos);
     }
 
-    private void carregarServicosFixos() {
-        String[] servicosFixos = {
-                "MÚSICA", "RECEPÇÃO DE MÃES", "ACOLHIDA", "TERÇO",
-                "FORMAÇÃO", "MOMENTO ORACIONAL", "PROCLAMAÇÃO DA VITÓRIA",
-                "SORTEIO DAS FLORES", "ENCERRAMENTO", "ARRUMAÇÃO CAPELA",
-                "QUEIMA DOS PEDIDOS", "COMPRA DAS FLORES"
-        };
+    private JPanel criarBotaoSalvar() {
+        JPanel painel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnSalvar = new JButton("Salvar Encontro");
+        btnSalvar.addActionListener(e -> salvarEncontro());
+        painel.add(btnSalvar);
+        return painel;
+    }
 
-        DefaultTableModel model = (DefaultTableModel) tabelaServicos.getModel();
-        for (String servico : servicosFixos) {
-            // Adicionado 0 para o ID da Mãe (coluna 2), indicando NULO no BD
-            model.addRow(new Object[]{servico, "", 0});
+    private void carregarDadosIniciais() {
+        if (encontroEmEdicao != null) {
+            txtData.setText(encontroEmEdicao.getDataEncontro().toString());
+        } else {
+            txtData.setText(LocalDate.now().toString());
         }
     }
 
-    private void carregarMaes() {
-        comboMae.removeAllItems();
-        // A MaeDAO.listar() deve garantir que o objeto Mae tem o ID da Mae
-        for (Mae m : maeDAO.listar()) {
-            comboMae.addItem(m);
+    private void salvarEncontro() {
+        boolean sucesso = false;
+        if (tabelaServicos.isEditing()) {
+            tabelaServicos.getCellEditor().stopCellEditing();
         }
-    }
-
-    private JPanel criarBotoes() {
-        JPanel botoes = new JPanel();
-        JButton btnAtribuir = new JButton("Atribuir Responsável");
-        JButton btnSalvar = new JButton("Salvar Encontro");
-
-        btnAtribuir.addActionListener(this::atribuirResponsavel);
-        btnSalvar.addActionListener(this::salvarEncontro);
-
-        botoes.add(btnAtribuir);
-        botoes.add(btnSalvar);
-
-        return botoes;
-    }
-
-    private void atribuirResponsavel(ActionEvent e) {
-        int linha = tabelaServicos.getSelectedRow();
-
-        if (linha == -1) {
-            JOptionPane.showMessageDialog(this, "Selecione um serviço na tabela!");
-            return;
-        }
-
-        Mae maeSelecionada = (Mae) comboMae.getSelectedItem();
-        if (maeSelecionada == null) {
-            JOptionPane.showMessageDialog(this, "Nenhuma mãe cadastrada!");
-            return;
-        }
-
-        // 1. Define o nome visível (coluna 1)
-        tabelaServicos.setValueAt(maeSelecionada.getNome(), linha, 1);
-
-        // 2. Define o ID da Mãe (coluna 2, oculta) para ser lido no momento de salvar
-        // É essencial que o objeto Mae retorne o ID correto (assumindo que Mae tem getIdMae())
-        tabelaServicos.setValueAt(maeSelecionada.getIdMae(), linha, 2);
-    }
-
-    private void salvarEncontro(ActionEvent e) {
-        // CORREÇÃO ESSENCIAL: Recria a lista de serviços a partir da tabela
-        List<Servico> servicosParaSalvar = new ArrayList<>();
-        DefaultTableModel model = (DefaultTableModel) tabelaServicos.getModel();
 
         try {
-            LocalDate data = LocalDate.parse(txtDataEncontro.getText());
+            LocalDate data = LocalDate.parse(txtData.getText());
 
-            for (int i = 0; i < model.getRowCount(); i++) {
-                String tipoServico = (String) model.getValueAt(i, 0);
-                int idMae = (Integer) model.getValueAt(i, 2); // Pega o ID da Mãe da coluna oculta
-
-                Servico s = new Servico();
-                s.setTipo(tipoServico);
-                s.setIdMae(idMae); // O DAO usará este ID para salvar
-                // s.setDescricao (se houvesse um campo para isso, você leria aqui)
-
-                servicosParaSalvar.add(s);
+            if (encontroEmEdicao == null) {
+                encontroEmEdicao = new Encontro();
             }
 
-            Encontro encontro = new Encontro();
-            encontro.setDataEncontro(data);
+            encontroEmEdicao.setDataEncontro(data);
+            encontroEmEdicao.setCancelado(false);
 
-            // ATRIBUI A LISTA COMPLETA
-            encontro.setServicos(servicosParaSalvar);
+            encontroEmEdicao.setServicos(servicoTableModel.getServicosParaSalvar());
 
-            encontroDAO.inserir(encontro);
+            if (encontroEmEdicao.getIdEncontro() == 0) {
+                encontroDAO.inserir(encontroEmEdicao);
+                sucesso = true;
+            } else {
+                sucesso = encontroDAO.atualizar(encontroEmEdicao);
+            }
 
-            JOptionPane.showMessageDialog(this, "✅ Encontro salvo com sucesso!");
-            dispose();
+            if (sucesso) {
+                JOptionPane.showMessageDialog(this, "Encontro salvo com sucesso!");
+                this.dispose();
+            } else {
+                JOptionPane.showMessageDialog(this, "Erro ao salvar encontro (DAO retornou false).", "Erro", JOptionPane.ERROR_MESSAGE);
+            }
 
+        } catch (java.time.format.DateTimeParseException dtpe) {
+            JOptionPane.showMessageDialog(this, "Erro: Formato de data inválido. Use YYYY-MM-DD.", "Erro de Entrada", JOptionPane.ERROR_MESSAGE);
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "ERRO CRÍTICO DE BANCO: Falha ao salvar ou atualizar. Verifique a integridade dos dados (chaves estrangeiras).",
+                    "Erro de Persistência", JOptionPane.ERROR_MESSAGE);
+            ex.printStackTrace();
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "❌ Erro ao salvar encontro: " + ex.getMessage());
+            JOptionPane.showMessageDialog(this, "Erro inesperado ao salvar: " + ex.getMessage(), "Erro Geral", JOptionPane.ERROR_MESSAGE);
+            ex.printStackTrace();
+        }
+    }
+
+    private class ServicoTableModel extends AbstractTableModel {
+        private final String[] COLUNAS = {"Serviço", "Responsável"};
+        private List<Servico> listaServicos;
+        private List<Mae> maesDisponiveis;
+
+        public ServicoTableModel(Encontro encontro, ServicoDAO servicoDAO, List<Mae> maes) {
+            this.maesDisponiveis = maes;
+
+            // --- TRATAMENTO DE ERRO AQUI (dentro do construtor) ---
+            try {
+                if (encontro != null && encontro.getIdEncontro() != 0) {
+                    List<Servico> todosTipos = servicoDAO.listar();
+                    List<Servico> servicosAtribuidos = encontro.getServicos();
+
+                    this.listaServicos = todosTipos.stream().map(tipo -> {
+                        servicosAtribuidos.stream()
+                                .filter(sa -> sa.getTipo().equals(tipo.getTipo()))
+                                .findFirst()
+                                .ifPresent(atribuido -> {
+                                    tipo.setIdMae(atribuido.getIdMae());
+                                });
+                        return tipo;
+                    }).collect(Collectors.toList());
+
+                } else {
+                    this.listaServicos = servicoDAO.listar();
+                    this.listaServicos.forEach(s -> s.setIdMae(0));
+                }
+            } catch (SQLException e) {
+                // AQUI O ERRO É TRATADO E EVITA A COMPILAÇÃO DO ERRO EXTERNO
+                JOptionPane.showMessageDialog(null, "Erro ao carregar lista de serviços: " + e.getMessage(), "Erro de Banco de Dados", JOptionPane.ERROR_MESSAGE);
+                this.listaServicos = new ArrayList<>();
+            }
+        }
+
+        public List<Servico> getServicosParaSalvar() { return listaServicos.stream().filter(s -> s.getIdMae() != 0).collect(Collectors.toList()); }
+        @Override public int getRowCount() { return listaServicos.size(); }
+        @Override public int getColumnCount() { return COLUNAS.length; }
+        @Override public String getColumnName(int column) { return COLUNAS[column]; }
+        @Override public boolean isCellEditable(int rowIndex, int columnIndex) { return columnIndex == 1; }
+
+        @Override public Object getValueAt(int rowIndex, int columnIndex) {
+            Servico servico = listaServicos.get(rowIndex);
+            switch (columnIndex) {
+                case 0: return servico.getTipo();
+                case 1:
+                    if (servico.getIdMae() != 0) {
+                        return maesDisponiveis.stream()
+                                .filter(m -> m.getIdMae() == servico.getIdMae())
+                                .findFirst().orElse(null);
+                    }
+                    return null;
+                default: return null;
+            }
+        }
+
+        @Override public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
+            if (columnIndex == 1) {
+                Servico servico = listaServicos.get(rowIndex);
+                Mae mae = (Mae) aValue;
+
+                if (mae != null && mae.getIdMae() != 0) {
+                    servico.setIdMae(mae.getIdMae());
+                } else {
+                    servico.setIdMae(0);
+                }
+                fireTableCellUpdated(rowIndex, columnIndex);
+            }
+        }
+
+        @Override public Class<?> getColumnClass(int columnIndex) {
+            if (columnIndex == 1) { return Mae.class; }
+            return String.class;
         }
     }
 }

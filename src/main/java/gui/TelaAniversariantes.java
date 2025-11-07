@@ -8,6 +8,8 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.net.URL;
 import java.util.List;
+import java.sql.SQLException; // NECESSÁRIO
+import java.util.ArrayList; // Para inicializar lista em caso de erro
 
 public class TelaAniversariantes extends JFrame {
 
@@ -37,6 +39,8 @@ public class TelaAniversariantes extends JFrame {
         carregarAniversariantes();
     }
 
+    // ... (criarTabela e criarBotoes inalterados) ...
+
     private JScrollPane criarTabela() {
         modeloTabela = new DefaultTableModel(
                 new Object[]{"Nome", "Telefone", "Endereço", "Aniversário"}, 0
@@ -58,7 +62,18 @@ public class TelaAniversariantes extends JFrame {
     private void carregarAniversariantes() {
         modeloTabela.setRowCount(0);
 
-        List<Mae> lista = maeDAO.listarAniversariantesDoMes();
+        List<Mae> lista = new ArrayList<>(); // Inicializa lista
+
+        try {
+            // LINHA 61 CORRIGIDA: Encapsulada em try-catch
+            lista = maeDAO.listarAniversariantesDoMes();
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this,
+                    "Erro ao carregar aniversariantes: " + e.getMessage(),
+                    "Erro de Banco de Dados", JOptionPane.ERROR_MESSAGE);
+            e.printStackTrace();
+        }
+
         for (Mae m : lista) {
             modeloTabela.addRow(new Object[]{
                     m.getNome(),
