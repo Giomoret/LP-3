@@ -6,6 +6,7 @@ import modelo.Servico;
 import javax.swing.*;
 import java.awt.*;
 import java.io.FileWriter;
+import java.net.URL;
 import java.util.List;
 
 public class TelaRelatorio extends JFrame {
@@ -14,6 +15,13 @@ public class TelaRelatorio extends JFrame {
 
     public TelaRelatorio() {
         setTitle("Gerar Relatório do Encontro");
+        try {
+            URL resource = TelaPrincipal.class.getResource("/Church_white.png");
+            Image icon = new ImageIcon(resource).getImage();
+            setIconImage(icon);
+        } catch (Exception e) {
+            System.out.println("Erro ao carregar o ícone: " + e.getMessage());
+        }
         setSize(350, 150);
         setLayout(new GridLayout(2, 2));
 

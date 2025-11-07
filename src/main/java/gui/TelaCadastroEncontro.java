@@ -10,6 +10,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.net.URL;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +29,13 @@ public class TelaCadastroEncontro extends JFrame {
 
     public TelaCadastroEncontro() {
         setTitle("Cadastro de Encontro");
+        try {
+            URL resource = TelaPrincipal.class.getResource("/Church_white.png");
+            Image icon = new ImageIcon(resource).getImage();
+            setIconImage(icon);
+        } catch (Exception e) {
+            System.out.println("Erro ao carregar o ícone: " + e.getMessage());
+        }
         setSize(700, 500);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);

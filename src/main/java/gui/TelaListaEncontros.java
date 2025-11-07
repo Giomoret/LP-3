@@ -7,6 +7,7 @@ import modelo.Servico;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.net.URL;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -18,6 +19,13 @@ public class TelaListaEncontros extends JFrame {
 
     public TelaListaEncontros() {
         setTitle("Lista de Encontros");
+        try {
+            URL resource = TelaPrincipal.class.getResource("/Church_white.png");
+            Image icon = new ImageIcon(resource).getImage();
+            setIconImage(icon);
+        } catch (Exception e) {
+            System.out.println("Erro ao carregar o ícone: " + e.getMessage());
+        }
         setSize(800, 500);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -110,6 +118,7 @@ public class TelaListaEncontros extends JFrame {
         }
 
         int id = (int) tabela.getValueAt(linha, 0);
+        System.out.println(id);
         LocalDate data = (LocalDate) tabela.getValueAt(linha, 1);
 
         encontroDAO.excluirFuturo(id, data);

@@ -6,6 +6,7 @@ import modelo.Mae;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.net.URL;
 import java.util.List;
 
 public class TelaAniversariantes extends JFrame {
@@ -16,6 +17,14 @@ public class TelaAniversariantes extends JFrame {
 
     public TelaAniversariantes() {
         setTitle("Aniversariantes do Mês");
+        try {
+            URL resource = TelaPrincipal.class.getResource("/Church_white.png");
+            Image icon = new ImageIcon(resource).getImage();
+            setIconImage(icon);
+        } catch (Exception e) {
+            System.out.println("Erro ao carregar o ícone: " + e.getMessage());
+        }
+
         setSize(600, 400);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);

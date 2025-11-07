@@ -44,7 +44,7 @@ public class EncontroDAO {
     // ================== LISTAR ENCONTROS ==================
     public List<Encontro> listar() {
         List<Encontro> encontros = new ArrayList<>();
-        String sql = "SELECT * FROM encontro ORDER BY data_encontro DESC";
+        String sql = "SELECT * FROM encontro WHERE cancelado = 0 ORDER BY data_encontro DESC";
 
         try (Connection conn = ConnectionFactory.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
