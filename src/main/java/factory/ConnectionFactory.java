@@ -8,7 +8,7 @@ public class ConnectionFactory {
 
     private static final String URL = "jdbc:mysql://localhost:3306/maesdb";
     private static final String USER = "root";
-    private static final String PASSWORD = "1234";
+    private static final String PASSWORD = "18g@ts";
     public static Connection getConnection() {
         try {
             return DriverManager.getConnection(URL, USER, PASSWORD);
