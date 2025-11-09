@@ -2,34 +2,34 @@ package modelo;
 
 public class Servico {
 
-    private int idServico;         // equivale ao id da tabela `servico`
-    private String tipo;           // MÚSICA / TERÇO / FORMAÇÃO... (nome_servico no SQL)
+    // -----------------------------
+    // Atributos
+    // -----------------------------
+    private int idServico;     // PK da tabela 'servico'
+    private String tipo;       // Tipo do serviço (ex: Música, Terço, Formação)
+    private int idMae;         // FK para tabela 'mae'
+    private String nomeMae;    // Nome da mãe (opcional - via JOIN)
+    private String descricao;  // Descrição opcional
+    private int idEncontro;    // FK para tabela 'encontro'
 
-    // **MANTIDO:** ID da mãe (int) para comunicação com o banco de dados
-    private int idMae;             // FK para a tabela mae (corresponde a 'id_mae' no SQL)
+    // -----------------------------
+    // Construtores
+    // -----------------------------
+    public Servico() {
+        // Construtor padrão necessário para frameworks e DAO
+    }
 
-    // **NOVO:** Campo para armazenar o nome da mãe (obtido via JOIN no DAO)
-    private String nomeMae;
-
-    private String descricao;      // descrição opcional da atividade
-    private int idEncontro;        // FK (chave estrangeira do encontro)
-
-    public Servico() {}
-
-    // Construtor ajustado para aceitar int para o ID da Mãe (mantendo a consistência)
     public Servico(int idServico, String tipo, int idMae, String descricao, int idEncontro) {
         this.idServico = idServico;
         this.tipo = tipo;
         this.idMae = idMae;
-        // Não é necessário adicionar nomeMae ao construtor se ele for populado apenas pelo DAO/ResultSet
         this.descricao = descricao;
         this.idEncontro = idEncontro;
     }
 
-    // -----------------------
-    // GETTERS E SETTERS
-    // -----------------------
-
+    // -----------------------------
+    // Getters e Setters
+    // -----------------------------
     public int getIdServico() {
         return idServico;
     }
@@ -54,7 +54,6 @@ public class Servico {
         this.idMae = idMae;
     }
 
-    // **NOVOS MÉTODOS PARA O NOME DA MÃE**
     public String getNomeMae() {
         return nomeMae;
     }
@@ -62,7 +61,6 @@ public class Servico {
     public void setNomeMae(String nomeMae) {
         this.nomeMae = nomeMae;
     }
-    // ------------------------------------
 
     public String getDescricao() {
         return descricao;
@@ -78,5 +76,14 @@ public class Servico {
 
     public void setIdEncontro(int idEncontro) {
         this.idEncontro = idEncontro;
+    }
+
+    // -----------------------------
+    // Métodos utilitários (opcionais)
+    // -----------------------------
+    @Override
+    public String toString() {
+        // Facilita o debug e a exibição em JComboBox
+        return tipo + (nomeMae != null ? " - " + nomeMae : "");
     }
 }

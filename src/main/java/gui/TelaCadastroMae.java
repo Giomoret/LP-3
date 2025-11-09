@@ -8,10 +8,9 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.net.URL;
 import java.sql.SQLException;
-import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.ArrayList;
-import java.time.format.DateTimeParseException;
 
 public class TelaCadastroMae extends JDialog {
 
@@ -19,7 +18,6 @@ public class TelaCadastroMae extends JDialog {
     private JTable tabela;
     private DefaultTableModel modeloTabela;
     private MaeDAO maeDAO = new MaeDAO();
-
     private Mae maeEmEdicao;
 
     public TelaCadastroMae(JFrame owner, Mae mae) {
@@ -27,11 +25,13 @@ public class TelaCadastroMae extends JDialog {
 
         this.maeEmEdicao = mae;
 
-        // Configuração visual da janela
+        // Ícone
         try {
             URL resource = TelaPrincipal.class.getResource("/Church_white.png");
-            Image icon = new ImageIcon(resource).getImage();
-            setIconImage(icon);
+            if (resource != null) {
+                Image icon = new ImageIcon(resource).getImage();
+                setIconImage(icon);
+            }
         } catch (Exception e) {
             System.out.println("Erro ao carregar o ícone: " + e.getMessage());
         }
@@ -52,7 +52,6 @@ public class TelaCadastroMae extends JDialog {
         }
 
         listarMaes();
-        // setVisible(true) FOI REMOVIDO PARA CORRIGIR A REABERTURA
     }
 
     private JPanel criarFormulario() {
@@ -82,6 +81,7 @@ public class TelaCadastroMae extends JDialog {
         tabela.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tabela.getSelectionModel().addListSelectionListener(e -> carregarDadosDoSelecionado());
 
+        // Oculta ID
         tabela.getColumnModel().getColumn(0).setMinWidth(0);
         tabela.getColumnModel().getColumn(0).setMaxWidth(0);
         tabela.getColumnModel().getColumn(0).setWidth(0);
@@ -100,7 +100,6 @@ public class TelaCadastroMae extends JDialog {
             txtAniversario.setText(dataObj != null ? dataObj.toString() : "");
 
             int id = (int) modeloTabela.getValueAt(linha, 0);
-
             maeEmEdicao = new Mae();
             maeEmEdicao.setIdMae(id);
         }
@@ -126,13 +125,28 @@ public class TelaCadastroMae extends JDialog {
 
     private void salvarMae() {
         try {
-            Mae mae = (maeEmEdicao != null && maeEmEdicao.getIdMae() != 0) ? maeEmEdicao : new Mae();
-
-            mae.setNome(txtNome.getText().trim());
-            mae.setTelefone(txtTelefone.getText().trim());
-            mae.setEndereco(txtEndereco.getText().trim());
-
+            String nome = txtNome.getText().trim();
+            String telefone = txtTelefone.getText().trim();
+            String endereco = txtEndereco.getText().trim();
             String dataText = txtAniversario.getText().trim();
+
+            // ✅ Validação: impede cadastro se todos os campos estiverem vazios
+            if (nome.isEmpty() && telefone.isEmpty() && endereco.isEmpty() && dataText.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "Preencha ao menos um campo antes de salvar!",
+                        "Dados insuficientes",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            Mae mae = (maeEmEdicao != null && maeEmEdicao.getIdMae() != 0)
+                    ? maeEmEdicao
+                    : new Mae();
+
+            mae.setNome(nome);
+            mae.setTelefone(telefone);
+            mae.setEndereco(endereco);
+
             if (!dataText.isEmpty()) {
                 java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
                 mae.setDataAniversario(java.time.LocalDate.parse(dataText, fmt));
@@ -140,30 +154,25 @@ public class TelaCadastroMae extends JDialog {
                 mae.setDataAniversario(null);
             }
 
-            // 2. Decide entre INSERIR ou ATUALIZAR
-            try {
-                if (mae.getIdMae() == 0) {
-                    maeDAO.inserir(mae);
-                    JOptionPane.showMessageDialog(this, "✅ Mãe cadastrada com sucesso!");
-                } else {
-                    maeDAO.atualizar(mae);
-                    JOptionPane.showMessageDialog(this, "✅ Mãe atualizada com sucesso!");
-                }
-            } catch (SQLException sqle) {
-                JOptionPane.showMessageDialog(this, "Erro de Banco de Dados: " + sqle.getMessage(), "Erro de Persistência", JOptionPane.ERROR_MESSAGE);
-                sqle.printStackTrace();
-                return;
+            // Decide entre inserir ou atualizar
+            if (mae.getIdMae() == 0) {
+                maeDAO.inserir(mae);
+                JOptionPane.showMessageDialog(this, "✅ Mãe cadastrada com sucesso!");
+            } else {
+                maeDAO.atualizar(mae);
+                JOptionPane.showMessageDialog(this, "✅ Mãe atualizada com sucesso!");
             }
 
             listarMaes();
             limparCampos();
             maeEmEdicao = null;
-
-            // CORREÇÃO FINAL: Fechar a janela após sucesso.
             this.dispose();
 
         } catch (DateTimeParseException dtpe) {
             JOptionPane.showMessageDialog(this, "Formato de data inválido. Use: YYYY-MM-DD\nEx: 1980-05-21");
+        } catch (SQLException sqle) {
+            JOptionPane.showMessageDialog(this, "Erro de Banco de Dados: " + sqle.getMessage(), "Erro de Persistência", JOptionPane.ERROR_MESSAGE);
+            sqle.printStackTrace();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Erro ao salvar: " + e.getMessage());
             e.printStackTrace();

@@ -8,12 +8,9 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.net.URL;
-import java.sql.SQLException; // <--- NECESSÁRIO PARA TRATAR ERROS DO DAO
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
-
-// Mantenha este import para que a classe TelaCadastroEncontro seja reconhecida
-import gui.TelaCadastroEncontro;
 
 public class TelaListaEncontros extends JFrame {
 
@@ -24,13 +21,15 @@ public class TelaListaEncontros extends JFrame {
     public TelaListaEncontros() {
         setTitle("Lista de Encontros");
         try {
-            // Ajustar o caminho se a TelaPrincipal não estiver no mesmo pacote
             URL resource = TelaPrincipal.class.getResource("/Church_white.png");
-            Image icon = new ImageIcon(resource).getImage();
-            setIconImage(icon);
+            if (resource != null) {
+                Image icon = new ImageIcon(resource).getImage();
+                setIconImage(icon);
+            }
         } catch (Exception e) {
             System.out.println("Erro ao carregar o ícone: " + e.getMessage());
         }
+
         setSize(800, 500);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -40,7 +39,7 @@ public class TelaListaEncontros extends JFrame {
         painel.add(criarBotoes(), BorderLayout.SOUTH);
 
         add(painel);
-        carregarEncontros(); // Chamada inicial
+        carregarEncontros();
     }
 
     private JScrollPane criarTabela() {
@@ -55,9 +54,8 @@ public class TelaListaEncontros extends JFrame {
 
         tabela = new JTable(modeloTabela);
         tabela.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        tabela.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
-        // Esconde a coluna do ID
+        // Oculta a coluna ID
         tabela.getColumnModel().getColumn(0).setMinWidth(0);
         tabela.getColumnModel().getColumn(0).setMaxWidth(0);
         tabela.getColumnModel().getColumn(0).setWidth(0);
@@ -70,18 +68,18 @@ public class TelaListaEncontros extends JFrame {
 
         JButton btnNovo = new JButton("Novo Encontro");
         JButton btnEditar = new JButton("Editar Encontro");
-        JButton btnAtualizar = new JButton("Atualizar lista");
-        JButton btnCancelar = new JButton("Cancelar encontro");
-        JButton btnExcluir = new JButton("Excluir Encontro Selecionado");
+        JButton btnAtualizar = new JButton("Atualizar Lista");
+        JButton btnCancelar = new JButton("Cancelar Encontro");
+        JButton btnExcluir = new JButton("Excluir Encontro");
 
-        btnEditar.addActionListener(e -> editarEncontro());
         btnNovo.addActionListener(e -> new TelaCadastroEncontro(this, null).setVisible(true));
+        btnEditar.addActionListener(e -> editarEncontro());
         btnAtualizar.addActionListener(e -> carregarEncontros());
         btnCancelar.addActionListener(e -> cancelarEncontro());
-        btnExcluir.addActionListener(e -> excluirEncontroSelecionado());
+        btnExcluir.addActionListener(e -> excluirEncontro());
 
-        botoes.add(btnEditar);
         botoes.add(btnNovo);
+        botoes.add(btnEditar);
         botoes.add(btnAtualizar);
         botoes.add(btnCancelar);
         botoes.add(btnExcluir);
@@ -89,70 +87,73 @@ public class TelaListaEncontros extends JFrame {
         return botoes;
     }
 
-    /** * MÉTODO PÚBLICO para ser chamado pela TelaCadastroEncontro (após salvar).
-     * AGORA COM TRATAMENTO DE ERROS.
-     */
+    // ================== CARREGAR ENCONTROS ==================
     public void carregarEncontros() {
         modeloTabela.setRowCount(0);
 
-        List<Encontro> encontros;
         try {
-            // LINHA 97 CORRIGIDA: Trata a SQLException lançada por encontroDAO.listar()
-            encontros = encontroDAO.listar();
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this,
-                    "Erro de Banco de Dados ao carregar encontros: " + e.getMessage(),
-                    "Erro de Conexão", JOptionPane.ERROR_MESSAGE);
-            e.printStackTrace();
-            return;
-        }
+            List<Encontro> encontros = encontroDAO.listar();
 
-        for (Encontro e : encontros) {
-            StringBuilder infoServicos = new StringBuilder();
+            for (Encontro e : encontros) {
+                StringBuilder infoServicos = new StringBuilder();
 
-            for (Servico s : e.getServicos()) {
-                infoServicos.append(s.getTipo())
-                        .append(" - ")
-                        .append(s.getNomeMae() != null ? s.getNomeMae() : "SEM RESPONSÁVEL")
-                        .append("\n");
+                for (Servico s : e.getServicos()) {
+                    infoServicos.append(s.getTipo())
+                            .append(" - ")
+                            .append(s.getNomeMae() != null ? s.getNomeMae() : "SEM RESPONSÁVEL")
+                            .append("\n");
+                }
+
+                modeloTabela.addRow(new Object[]{
+                        e.getIdEncontro(),
+                        e.getDataEncontro(),
+                        infoServicos.toString(),
+                        e.isCancelado() ? "SIM" : "NÃO"
+                });
             }
 
-            modeloTabela.addRow(new Object[]{
-                    e.getIdEncontro(), // ID na coluna 0 (oculta)
-                    e.getDataEncontro(),
-                    infoServicos.toString(),
-                    e.isCancelado() ? "SIM" : "NÃO"
-            });
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this,
+                    "Erro ao carregar encontros: " + e.getMessage(),
+                    "Erro de Banco de Dados",
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
 
+    // ================== EDITAR ENCONTRO (somente futuros) ==================
     public void editarEncontro() {
         int linha = tabela.getSelectedRow();
-
         if (linha == -1) {
             JOptionPane.showMessageDialog(this, "Selecione um encontro para editar.");
             return;
         }
 
         int id = (int) tabela.getValueAt(linha, 0);
-
-        Encontro encontroParaEditar = null;
         try {
-            encontroParaEditar = encontroDAO.buscarPorId(id); // Deve tratar SQLException se o DAO lançar
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "Erro ao buscar detalhes do encontro: " + e.getMessage(), "Erro de Banco", JOptionPane.ERROR_MESSAGE);
-            e.printStackTrace();
-            return;
-        }
+            Encontro encontro = encontroDAO.buscarPorId(id);
 
-        if (encontroParaEditar != null) {
-            TelaCadastroEncontro telaEdicao = new TelaCadastroEncontro(this, encontroParaEditar);
+            if (encontro == null) {
+                JOptionPane.showMessageDialog(this, "Encontro não encontrado.");
+                return;
+            }
+
+            if (encontro.getDataEncontro().isBefore(LocalDate.now())) {
+                JOptionPane.showMessageDialog(this, "Encontros passados não podem ser editados.");
+                return;
+            }
+
+            TelaCadastroEncontro telaEdicao = new TelaCadastroEncontro(this, encontro);
             telaEdicao.setVisible(true);
-        } else {
-            JOptionPane.showMessageDialog(this, "Erro: Encontro não encontrado no banco de dados.");
+
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this,
+                    "Erro ao buscar encontro: " + e.getMessage(),
+                    "Erro de Banco de Dados",
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
 
+    // ================== CANCELAR ENCONTRO ==================
     private void cancelarEncontro() {
         int linha = tabela.getSelectedRow();
         if (linha == -1) {
@@ -162,48 +163,53 @@ public class TelaListaEncontros extends JFrame {
 
         int id = (int) tabela.getValueAt(linha, 0);
         int confirm = JOptionPane.showConfirmDialog(this,
-                "Tem certeza que deseja CANCELAR o encontro selecionado?",
-                "Confirmação de Cancelamento", JOptionPane.YES_NO_OPTION);
+                "Tem certeza que deseja CANCELAR este encontro?",
+                "Confirmação de Cancelamento",
+                JOptionPane.YES_NO_OPTION);
 
         if (confirm == JOptionPane.YES_OPTION) {
-            try { // <-- TRATAMENTO DO MÉTODO cancelamento
+            try {
                 encontroDAO.cancelar(id);
-                JOptionPane.showMessageDialog(this, "Encontro cancelado!");
+                JOptionPane.showMessageDialog(this, "Encontro cancelado com sucesso!");
                 carregarEncontros();
             } catch (SQLException e) {
-                JOptionPane.showMessageDialog(this, "Erro de Banco de Dados ao cancelar: " + e.getMessage(), "Erro de Persistência", JOptionPane.ERROR_MESSAGE);
-                e.printStackTrace();
+                JOptionPane.showMessageDialog(this,
+                        "Erro ao cancelar encontro: " + e.getMessage(),
+                        "Erro de Banco de Dados",
+                        JOptionPane.ERROR_MESSAGE);
             }
         }
     }
 
-    /** Exclui o encontro selecionado e atualiza a tabela. */
-    private void excluirEncontroSelecionado() {
+    // ================== EXCLUIR ENCONTRO ==================
+    private void excluirEncontro() {
         int linha = tabela.getSelectedRow();
         if (linha == -1) {
             JOptionPane.showMessageDialog(this, "Selecione um encontro para excluir!");
             return;
         }
 
-        int id = (int) modeloTabela.getValueAt(linha, 0);
-
+        int id = (int) tabela.getValueAt(linha, 0);
         int confirm = JOptionPane.showConfirmDialog(this,
-                "Tem certeza que deseja EXCLUIR o encontro selecionado? Esta ação é irreversível!",
-                "Confirmação de Exclusão", JOptionPane.YES_NO_OPTION);
+                "Tem certeza que deseja EXCLUIR este encontro permanentemente?",
+                "Confirmação de Exclusão",
+                JOptionPane.YES_NO_OPTION);
 
         if (confirm == JOptionPane.YES_OPTION) {
-            try { // <-- TRATAMENTO DO MÉTODO exclusão
-                // LINHA 177 CORRIGIDA: exclusão
+            try {
                 encontroDAO.excluir(id);
                 JOptionPane.showMessageDialog(this, "Encontro excluído com sucesso!");
-                carregarEncontros(); // Atualiza a tabela
+                carregarEncontros();
             } catch (SQLException e) {
-                JOptionPane.showMessageDialog(this, "Erro de Banco de Dados ao excluir: " + e.getMessage(), "Erro de Persistência", JOptionPane.ERROR_MESSAGE);
-                e.printStackTrace();
+                JOptionPane.showMessageDialog(this,
+                        "Erro ao excluir encontro: " + e.getMessage(),
+                        "Erro de Banco de Dados",
+                        JOptionPane.ERROR_MESSAGE);
             }
         }
     }
 
+    // ================== MAIN ==================
     public static void main(String[] args) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());

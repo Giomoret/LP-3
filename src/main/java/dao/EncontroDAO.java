@@ -11,221 +11,245 @@ import java.util.List;
 
 public class EncontroDAO {
 
-    private final ServicoDAO servicoDAO = new ServicoDAO();
-
-    // ================== INSERIR ENCONTRO (COMPARTILHA CONEXÃO) ==================
+    // ===================== INSERIR ENCONTRO =====================
     public void inserir(Encontro encontro) throws SQLException {
-        String sql = "INSERT INTO encontro (data_encontro, cancelado) VALUES (?, ?)";
+        String sqlEncontro = "INSERT INTO encontro (data_encontro, cancelado) VALUES (?, FALSE)";
+        String sqlServico = "INSERT INTO servico (nome_servico, descricao, id_mae, id_encontro) VALUES (?, ?, ?, ?)";
 
         try (Connection conn = ConnectionFactory.getConnection()) {
             conn.setAutoCommit(false);
 
-            try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            try (PreparedStatement stmtEncontro = conn.prepareStatement(sqlEncontro, Statement.RETURN_GENERATED_KEYS)) {
+                stmtEncontro.setDate(1, Date.valueOf(encontro.getDataEncontro()));
+                stmtEncontro.executeUpdate();
 
-                stmt.setDate(1, Date.valueOf(encontro.getDataEncontro()));
-                stmt.setBoolean(2, encontro.isCancelado());
-                stmt.executeUpdate();
+                ResultSet rs = stmtEncontro.getGeneratedKeys();
+                int idEncontro = 0;
+                if (rs.next()) idEncontro = rs.getInt(1);
 
-                ResultSet rs = stmt.getGeneratedKeys();
-                if (rs.next()) {
-                    int idEncontro = rs.getInt(1);
-
-                    if (encontro.getServicos() != null) {
-                        for (Servico s : encontro.getServicos()) {
-                            // MUDANÇA CRÍTICA: Passa a conexão (conn) para ServicoDAO.inserir()
-                            servicoDAO.inserir(conn, s, idEncontro);
-                        }
+                try (PreparedStatement stmtServico = conn.prepareStatement(sqlServico)) {
+                    for (Servico s : encontro.getServicos()) {
+                        stmtServico.setString(1, s.getTipo());
+                        stmtServico.setString(2, s.getDescricao());
+                        if (s.getIdMae() != 0) stmtServico.setInt(3, s.getIdMae());
+                        else stmtServico.setNull(3, Types.INTEGER);
+                        stmtServico.setInt(4, idEncontro);
+                        stmtServico.addBatch();
                     }
+                    stmtServico.executeBatch();
                 }
 
                 conn.commit();
-
             } catch (SQLException e) {
                 conn.rollback();
-                System.out.println("Erro na transação de inserção: " + e.getMessage());
-                e.printStackTrace();
                 throw e;
+            } finally {
+                conn.setAutoCommit(true);
             }
         }
     }
 
-    // ================== ATUALIZAR ENCONTRO (COMPARTILHA CONEXÃO) ==================
+    // ===================== ATUALIZAR ENCONTRO =====================
     public boolean atualizar(Encontro encontro) throws SQLException {
         String sqlEncontro = "UPDATE encontro SET data_encontro = ?, cancelado = ? WHERE id_encontro = ?";
-
-        boolean sucesso = false;
+        String sqlExcluirServicos = "DELETE FROM servico WHERE id_encontro = ?";
+        String sqlInserirServico = "INSERT INTO servico (nome_servico, descricao, id_mae, id_encontro) VALUES (?, ?, ?, ?)";
 
         try (Connection conn = ConnectionFactory.getConnection()) {
             conn.setAutoCommit(false);
 
-            try (PreparedStatement stmtEncontro = conn.prepareStatement(sqlEncontro)) {
+            try (
+                    PreparedStatement stmtEncontro = conn.prepareStatement(sqlEncontro);
+                    PreparedStatement stmtExcluir = conn.prepareStatement(sqlExcluirServicos);
+                    PreparedStatement stmtInserir = conn.prepareStatement(sqlInserirServico)
+            ) {
+                // Atualiza dados do encontro
                 stmtEncontro.setDate(1, Date.valueOf(encontro.getDataEncontro()));
                 stmtEncontro.setBoolean(2, encontro.isCancelado());
                 stmtEncontro.setInt(3, encontro.getIdEncontro());
+                stmtEncontro.executeUpdate();
 
-                if (stmtEncontro.executeUpdate() > 0) {
-                    deletarServicosDoEncontro(conn, encontro.getIdEncontro()); // Auxiliar já usa a conexão
+                // Remove serviços antigos
+                stmtExcluir.setInt(1, encontro.getIdEncontro());
+                stmtExcluir.executeUpdate();
 
-                    if (encontro.getServicos() != null) {
-                        for (Servico s : encontro.getServicos()) {
-                            // MUDANÇA CRÍTICA: Passa a conexão (conn) para ServicoDAO.inserir()
-                            servicoDAO.inserir(conn, s, encontro.getIdEncontro());
-                        }
-                    }
-
-                    conn.commit();
-                    sucesso = true;
-                } else {
-                    conn.rollback();
+                // Reinsere serviços atualizados
+                for (Servico s : encontro.getServicos()) {
+                    stmtInserir.setString(1, s.getTipo());
+                    stmtInserir.setString(2, s.getDescricao());
+                    if (s.getIdMae() != 0) stmtInserir.setInt(3, s.getIdMae());
+                    else stmtInserir.setNull(3, Types.INTEGER);
+                    stmtInserir.setInt(4, encontro.getIdEncontro());
+                    stmtInserir.addBatch();
                 }
+
+                stmtInserir.executeBatch();
+                conn.commit();
+                return true;
+
             } catch (SQLException e) {
                 conn.rollback();
                 throw e;
+            } finally {
+                conn.setAutoCommit(true);
             }
         }
-        return sucesso;
     }
 
-    // ================== MÉTODO AUXILIAR PARA ATUALIZAR (DELETAR SERVIÇOS ANTIGOS) ==================
-    private void deletarServicosDoEncontro(Connection conn, int idEncontro) throws SQLException {
-        String sql = "DELETE FROM servico WHERE id_encontro = ?";
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, idEncontro);
-            stmt.executeUpdate();
-        }
-    }
-
-    // ================== BUSCAR ENCONTRO POR ID ==================
-    public Encontro buscarPorId(int idEncontro) throws SQLException {
-        Encontro encontro = null;
-        String sql = "SELECT * FROM encontro WHERE id_encontro = ?";
-
-        try (Connection conn = ConnectionFactory.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, idEncontro);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    encontro = new Encontro();
-                    encontro.setIdEncontro(rs.getInt("id_encontro"));
-                    encontro.setDataEncontro(rs.getDate("data_encontro").toLocalDate());
-                    encontro.setCancelado(rs.getBoolean("cancelado"));
-
-                    encontro.setServicos(servicoDAO.listarPorEncontro(encontro.getIdEncontro()));
-                }
-            }
-        } catch (SQLException e) {
-            System.out.println("Erro ao buscar encontro por ID: " + e.getMessage());
-            throw e;
-        }
-        return encontro;
-    }
-
-    // ================== LISTAR ENCONTROS (CORRIGIDO PARA INCLUIR CANCELADOS) ==================
+    // ===================== LISTAR ENCONTROS =====================
     public List<Encontro> listar() throws SQLException {
         List<Encontro> encontros = new ArrayList<>();
-        // CORREÇÃO: Remove 'WHERE cancelado = 0' para listar TODOS os encontros.
-        String sql = "SELECT * FROM encontro ORDER BY data_encontro DESC";
+
+        String sql = """
+                SELECT e.id_encontro, e.data_encontro, e.cancelado,
+                       s.nome_servico, s.descricao, s.id_mae, m.nome AS nomeMae
+                FROM encontro e
+                LEFT JOIN servico s ON e.id_encontro = s.id_encontro
+                LEFT JOIN mae m ON s.id_mae = m.id_mae
+                ORDER BY e.data_encontro DESC
+                """;
 
         try (Connection conn = ConnectionFactory.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
 
+            Encontro encontroAtual = null;
+            int ultimoId = -1;
+
             while (rs.next()) {
-                Encontro encontro = new Encontro();
-                encontro.setIdEncontro(rs.getInt("id_encontro"));
-                encontro.setDataEncontro(rs.getDate("data_encontro").toLocalDate());
-                encontro.setCancelado(rs.getBoolean("cancelado"));
+                int idEncontro = rs.getInt("id_encontro");
 
-                encontro.setServicos(servicoDAO.listarPorEncontro(encontro.getIdEncontro()));
+                if (idEncontro != ultimoId) {
+                    encontroAtual = new Encontro();
+                    encontroAtual.setIdEncontro(idEncontro);
+                    encontroAtual.setDataEncontro(rs.getDate("data_encontro").toLocalDate());
+                    encontroAtual.setCancelado(rs.getBoolean("cancelado"));
+                    encontroAtual.setServicos(new ArrayList<>());
+                    encontros.add(encontroAtual);
+                    ultimoId = idEncontro;
+                }
 
-                encontros.add(encontro);
+                if (encontroAtual != null) {
+                    Servico s = new Servico();
+                    s.setTipo(rs.getString("nome_servico"));
+                    s.setDescricao(rs.getString("descricao"));
+                    s.setIdMae(rs.getInt("id_mae"));
+                    s.setNomeMae(rs.getString("nomeMae"));
+                    encontroAtual.getServicos().add(s);
+                }
             }
-
-        } catch (SQLException e) {
-            System.out.println("Erro ao listar encontros: " + e.getMessage());
-            throw e;
         }
 
         return encontros;
     }
 
-    // ================== EXCLUIR ENCONTRO SELECIONADO ==================
-    public void excluir(int idEncontro) throws SQLException {
-        String sql = "DELETE FROM encontro WHERE id_encontro = ?";
+    // ===================== BUSCAR POR ID =====================
+    public Encontro buscarPorId(int id) throws SQLException {
+        Encontro encontro = null;
+
+        String sql = """
+                SELECT e.id_encontro, e.data_encontro, e.cancelado,
+                       s.nome_servico, s.descricao, s.id_mae, m.nome AS nomeMae
+                FROM encontro e
+                LEFT JOIN servico s ON e.id_encontro = s.id_encontro
+                LEFT JOIN mae m ON s.id_mae = m.id_mae
+                WHERE e.id_encontro = ?
+                """;
 
         try (Connection conn = ConnectionFactory.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setInt(1, idEncontro);
-            stmt.executeUpdate();
-
-        } catch (SQLException e) {
-            System.out.println("Erro ao excluir encontro: " + e.getMessage());
-            throw e;
-        }
-    }
-
-    // ================== CANCELAR ENCONTRO ==================
-    // Este método faz o UPDATE necessário para a funcionalidade de "cancelar"
-    public void cancelar(int idEncontro) throws SQLException {
-        String sql = "UPDATE encontro SET cancelado = true WHERE id_encontro = ?";
-
-        try (Connection conn = ConnectionFactory.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, idEncontro);
-            stmt.executeUpdate();
-
-        } catch (SQLException e) {
-            System.out.println("Erro ao cancelar encontro: " + e.getMessage());
-            throw e;
-        }
-    }
-
-    // ================== EXCLUIR ENCONTROS FUTUROS ==================
-    public void excluirFuturo() throws SQLException {
-        String sql = "DELETE FROM encontro WHERE data_encontro > CURRENT_DATE AND cancelado = false";
-
-        try (Connection conn = ConnectionFactory.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            int linhasAfetadas = stmt.executeUpdate();
-            System.out.println("Número de encontros futuros excluídos: " + linhasAfetadas);
-
-        } catch (SQLException e) {
-            System.out.println("Erro ao excluir encontros futuros: " + e.getMessage());
-            throw e;
-        }
-    }
-
-    // ================== BUSCAR SERVIÇOS POR DATA ==================
-    public List<Servico> buscarServicosPorData(LocalDate data) throws SQLException {
-        List<Servico> servicos = new ArrayList<>();
-
-        String sql = "SELECT s.*, m.nome as nomeMae FROM servico s " +
-                "JOIN encontro e ON s.id_encontro = e.id_encontro " +
-                "LEFT JOIN mae m ON s.id_mae = m.id_mae " +
-                "WHERE e.data_encontro = ? AND e.cancelado = false";
-
-        try (Connection conn = ConnectionFactory.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setDate(1, java.sql.Date.valueOf(data));
+            stmt.setInt(1, id);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
+                    if (encontro == null) {
+                        encontro = new Encontro();
+                        encontro.setIdEncontro(rs.getInt("id_encontro"));
+                        encontro.setDataEncontro(rs.getDate("data_encontro").toLocalDate());
+                        encontro.setCancelado(rs.getBoolean("cancelado"));
+                        encontro.setServicos(new ArrayList<>());
+                    }
+
                     Servico s = new Servico();
                     s.setTipo(rs.getString("nome_servico"));
+                    s.setDescricao(rs.getString("descricao"));
+                    s.setIdMae(rs.getInt("id_mae"));
                     s.setNomeMae(rs.getString("nomeMae"));
-
-                    servicos.add(s);
+                    encontro.getServicos().add(s);
                 }
             }
-        } catch (SQLException e) {
-            System.out.println("Erro ao buscar serviços por data: " + e.getMessage());
-            throw e;
         }
+
+        return encontro;
+    }
+
+    // ===================== CANCELAR ENCONTRO (lógico) =====================
+    public void cancelar(int id) throws SQLException {
+        String sql = "UPDATE encontro SET cancelado = TRUE WHERE id_encontro = ?";
+        try (Connection conn = ConnectionFactory.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, id);
+            stmt.executeUpdate();
+        }
+    }
+
+    // ===================== EXCLUIR ENCONTRO (físico) =====================
+    public void excluir(int id) throws SQLException {
+        String sqlServicos = "DELETE FROM servico WHERE id_encontro = ?";
+        String sqlEncontro = "DELETE FROM encontro WHERE id_encontro = ?";
+
+        try (Connection conn = ConnectionFactory.getConnection()) {
+            conn.setAutoCommit(false);
+
+            try (PreparedStatement stmtServ = conn.prepareStatement(sqlServicos);
+                 PreparedStatement stmtEnc = conn.prepareStatement(sqlEncontro)) {
+
+                stmtServ.setInt(1, id);
+                stmtServ.executeUpdate();
+
+                stmtEnc.setInt(1, id);
+                stmtEnc.executeUpdate();
+
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        }
+    }
+
+    // ===================== BUSCAR SERVIÇOS POR DATA (para relatório) =====================
+    public List<Servico> buscarServicosPorData(LocalDate data) throws SQLException {
+        List<Servico> servicos = new ArrayList<>();
+
+        String sql = """
+                SELECT s.nome_servico, s.descricao, m.nome AS nomeMae
+                FROM servico s
+                JOIN encontro e ON s.id_encontro = e.id_encontro
+                LEFT JOIN mae m ON s.id_mae = m.id_mae
+                WHERE e.data_encontro = ? AND e.cancelado = FALSE
+                ORDER BY s.nome_servico
+                """;
+
+        try (Connection conn = ConnectionFactory.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setDate(1, Date.valueOf(data));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Servico servico = new Servico();
+                    servico.setTipo(rs.getString("nome_servico"));
+                    servico.setDescricao(rs.getString("descricao"));
+                    servico.setNomeMae(rs.getString("nomeMae"));
+                    servicos.add(servico);
+                }
+            }
+        }
+
         return servicos;
     }
 }
